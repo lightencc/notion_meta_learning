@@ -1,0 +1,23 @@
+[notion]
+token_env = "NOTION_TOKEN"
+
+[agent]
+google_api_env = "GOOGLE_API_KEY"
+model = "gemini-3-flash-preview"
+confidence_threshold = 0.7
+temperature = 0.2
+
+[postgres]
+dsn_env = "POSTGRES_DSN"
+schema = "notion_sync"
+
+[logging]
+dir = "./data/logs"
+
+[databases]
+resources = "eb1861e3-dd9f-4d05-8f66-eed20405c5bb"
+concepts = "6a4d5f60-96d3-4b93-b7cc-36c9236384f9"
+skills = "287e1884-8fe8-443c-98ca-e28b0ecc5b8c"
+mindsets = "51963be9-a4eb-4a31-8571-e1ea14137eb7"
+errors = "b73618d6-76a3-497e-a405-f618be2984ee"
+actions = "15664f5c-77e3-4bc8-b12d-d4a6d6f3edbb"
