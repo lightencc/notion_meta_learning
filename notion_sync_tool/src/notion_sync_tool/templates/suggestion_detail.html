@@ -1,0 +1,143 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="panel">
+  <h2>建议 #{{ row.suggestion_id }}</h2>
+  {% if action_notice %}
+  <div class="muted" style="margin-top:8px;color:#1a9a55;">{{ action_notice }}</div>
+  {% endif %}
+  {% if action_error %}
+  <div class="muted" style="margin-top:8px;color:#b32522;">{{ action_error }}</div>
+  {% endif %}
+  <div class="row muted">
+    <div>状态：<span class="badge status-{{ row.status }}">{{ row.status|status_zh }}</span></div>
+    <div>置信度：<strong>{{ '%.2f'|format(row.confidence or 0) }}</strong></div>
+    <div>错题页面：<a href="{{ source.url }}" target="_blank">{{ source.title }}</a></div>
+    <div>更新时间：{{ row.updated_at|tz8 }}</div>
+  </div>
+</div>
+
+<div class="panel">
+  <h3>步骤 1：原始上下文</h3>
+  <div class="grid">
+    <div>
+      <div class="muted">属性文本</div>
+      <div class="code">{{ source.property_text or '-' }}</div>
+    </div>
+    <div>
+      <div class="muted">页面正文</div>
+      <div class="code">{{ source.plain_text or '-' }}</div>
+    </div>
+  </div>
+</div>
+
+<div class="panel">
+  <h3>步骤 2：候选上下文</h3>
+  <div class="grid">
+    <div><div class="muted">资料库（{{ candidates.resources|length if candidates.resources else 0 }}）</div><div class="code">{% for c in candidates.resources or [] %}{{ c.id }} | {{ c.title }}
+{% endfor %}</div></div>
+    <div><div class="muted">概念库（{{ candidates.concepts|length if candidates.concepts else 0 }}）</div><div class="code">{% for c in candidates.concepts or [] %}{{ c.id }} | {{ c.title }}
+{% endfor %}</div></div>
+    <div><div class="muted">技能库（{{ candidates.skills|length if candidates.skills else 0 }}）</div><div class="code">{% for c in candidates.skills or [] %}{{ c.id }} | {{ c.title }}
+{% endfor %}</div></div>
+    <div><div class="muted">思想库（{{ candidates.mindsets|length if candidates.mindsets else 0 }}）</div><div class="code">{% for c in candidates.mindsets or [] %}{{ c.id }} | {{ c.title }}
+{% endfor %}</div></div>
+  </div>
+  <div style="margin-top: 10px;">
+    <div class="muted">相似错题候选（{{ candidates.similar_errors|length if candidates.similar_errors else 0 }}）</div>
+    <div class="code">{% for c in candidates.similar_errors or [] %}{{ c.id }} | {{ c.title }}
+{% endfor %}</div>
+  </div>
+</div>
+
+<div class="panel">
+  <h3>步骤 3：Agent 输出与人工调整</h3>
+  <form method="post" action="/suggestions/{{ row.suggestion_id }}/save">
+    <div class="grid">
+      <div>
+        <label>建议标题</label>
+        <input type="text" name="proposed_title" value="{{ row.proposed_title or '' }}" />
+      </div>
+      <div>
+        <label>资料库关联</label>
+        <select name="proposed_resource_id">
+          <option value="">-- 请选择 --</option>
+          {% for c in candidates.resources or [] %}
+          <option value="{{ c.id }}" {% if row.proposed_resource_id == c.id %}selected{% endif %}>{{ c.title }} ({{ c.id[:8] }})</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div>
+        <label>概念库关联</label>
+        <select name="proposed_concept_id">
+          <option value="">-- 请选择 --</option>
+          {% for c in candidates.concepts or [] %}
+          <option value="{{ c.id }}" {% if row.proposed_concept_id == c.id %}selected{% endif %}>{{ c.title }} ({{ c.id[:8] }})</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div>
+        <label>技能库关联</label>
+        <select name="proposed_skill_id">
+          <option value="">-- 请选择 --</option>
+          {% for c in candidates.skills or [] %}
+          <option value="{{ c.id }}" {% if row.proposed_skill_id == c.id %}selected{% endif %}>{{ c.title }} ({{ c.id[:8] }})</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div>
+        <label>思想库关联</label>
+        <select name="proposed_mindset_id">
+          <option value="">-- 请选择 --</option>
+          {% for c in candidates.mindsets or [] %}
+          <option value="{{ c.id }}" {% if row.proposed_mindset_id == c.id %}selected{% endif %}>{{ c.title }} ({{ c.id[:8] }})</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div>
+        <label>相似错题 ID（逗号分隔，最多 3 条）</label>
+        <input type="text" name="proposed_similar_ids" value="{{ selected_similar|join(',') }}" />
+      </div>
+    </div>
+
+    <div style="margin-top: 10px;">
+      <label>复核备注</label>
+      <textarea name="reviewer_note">{{ row.reviewer_note or '' }}</textarea>
+    </div>
+
+    <div class="row" style="margin-top: 10px;">
+      <button type="submit" class="btn secondary">保存草稿</button>
+    </div>
+  </form>
+</div>
+
+<div class="panel">
+  <h3>步骤 4：确认决策</h3>
+  <div class="row" style="gap: 8px;margin-bottom: 10px;">
+    <form method="post" action="/suggestions/{{ row.suggestion_id }}/regenerate-apply">
+      <input type="hidden" name="reviewer_note" value="{{ row.reviewer_note or '' }}" />
+      <button class="btn warn js-long-task" data-loading-text="重生成并回写中..." type="submit">重新生成并回写 Notion</button>
+    </form>
+  </div>
+  <div class="row" style="gap: 8px;">
+    <form method="post" action="/suggestions/{{ row.suggestion_id }}/approve">
+      <input type="hidden" name="reviewer_note" value="{{ row.reviewer_note or '' }}" />
+      <button class="btn success js-long-task" data-loading-text="回写中..." type="submit">确认并更新 Notion</button>
+    </form>
+    <form method="post" action="/suggestions/{{ row.suggestion_id }}/reject">
+      <input type="hidden" name="reviewer_note" value="{{ row.reviewer_note or '' }}" />
+      <button class="btn danger" type="submit">驳回</button>
+    </form>
+  </div>
+  {% if row.validation_notes %}
+  <div class="muted" style="margin-top: 10px;"><strong>校验说明：</strong> {{ row.validation_notes }}</div>
+  {% endif %}
+  {% if row.failure_reason %}
+  <div class="muted" style="margin-top: 8px;color:#b32522;"><strong>失败原因：</strong> {{ row.failure_reason }}</div>
+  {% endif %}
+</div>
+
+<div class="panel">
+  <h3>Agent 原始 JSON</h3>
+  <div class="code">{{ model_response_pretty }}</div>
+</div>
+{% endblock %}

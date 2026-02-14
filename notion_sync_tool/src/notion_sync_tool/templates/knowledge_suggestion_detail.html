@@ -1,0 +1,82 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="panel">
+  <h2>知识建议 #{{ row.suggestion_id }}</h2>
+  {% if action_notice %}
+  <div class="muted" style="margin-top:8px;color:#1a9a55;">{{ action_notice }}</div>
+  {% endif %}
+  {% if action_error %}
+  <div class="muted" style="margin-top:8px;color:#b32522;">{{ action_error }}</div>
+  {% endif %}
+  <div class="row muted">
+    <div>库：{{ row.logical_db|status_zh }}</div>
+    <div>状态：<span class="badge status-{{ row.status }}">{{ row.status|status_zh }}</span></div>
+    <div>置信度：<strong>{{ '%.2f'|format(row.confidence or 0) }}</strong></div>
+    <div>页面：{{ row.page_title }}</div>
+    <div>更新时间：{{ row.updated_at|tz8 }}</div>
+  </div>
+</div>
+
+<div class="panel">
+  <h3>步骤 1：来源上下文</h3>
+  <div class="grid">
+    <div>
+      <div class="muted">来源引用</div>
+      <div class="code">{% for item in source_refs %}{{ item }}
+{% endfor %}</div>
+    </div>
+    <div>
+      <div class="muted">源快照（摘要）</div>
+      <div class="code">{{ source_snapshot_pretty }}</div>
+    </div>
+  </div>
+</div>
+
+<div class="panel">
+  <h3>步骤 2：Agent 结果与人工调整</h3>
+  <form method="post" action="/knowledge/suggestions/{{ row.suggestion_id }}/save">
+    <div>
+      <label>建议内容（Markdown）</label>
+      <textarea name="proposed_markdown" style="min-height: 360px;">{{ row.proposed_markdown }}</textarea>
+    </div>
+    <div style="margin-top: 10px;">
+      <label>复核备注</label>
+      <textarea name="reviewer_note">{{ row.reviewer_note or '' }}</textarea>
+    </div>
+    <div class="row" style="margin-top: 10px;">
+      <button type="submit" class="btn secondary">保存草稿</button>
+    </div>
+  </form>
+</div>
+
+<div class="panel">
+  <h3>步骤 3：确认决策</h3>
+  <div class="row" style="margin-bottom: 10px;">
+    <form method="post" action="/knowledge/suggestions/{{ row.suggestion_id }}/regenerate">
+      <input type="hidden" name="reviewer_note" value="{{ row.reviewer_note or '' }}" />
+      <button class="btn warn js-long-task" data-loading-text="重生成中..." type="submit">重新生成建议</button>
+    </form>
+  </div>
+  <div class="row">
+    <form method="post" action="/knowledge/suggestions/{{ row.suggestion_id }}/approve">
+      <input type="hidden" name="reviewer_note" value="{{ row.reviewer_note or '' }}" />
+      <button class="btn success js-long-task" data-loading-text="回写中..." type="submit">确认并更新 Notion</button>
+    </form>
+    <form method="post" action="/knowledge/suggestions/{{ row.suggestion_id }}/reject">
+      <input type="hidden" name="reviewer_note" value="{{ row.reviewer_note or '' }}" />
+      <button class="btn danger" type="submit">驳回</button>
+    </form>
+  </div>
+  {% if row.validation_notes %}
+  <div class="muted" style="margin-top: 10px;"><strong>校验说明：</strong> {{ row.validation_notes }}</div>
+  {% endif %}
+  {% if row.failure_reason %}
+  <div class="muted" style="margin-top: 10px;color:#b32522;"><strong>失败原因：</strong> {{ row.failure_reason }}</div>
+  {% endif %}
+</div>
+
+<div class="panel">
+  <h3>Agent 原始 JSON</h3>
+  <div class="code">{{ model_response_pretty }}</div>
+</div>
+{% endblock %}

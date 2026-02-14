@@ -1,0 +1,73 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="panel">
+  <h2>批次 #{{ run.run_id }}</h2>
+  <div class="row muted">
+    <div>状态：<span class="badge status-{{ run.status }}">{{ run.status|status_zh }}</span></div>
+    <div>开始：{{ run.started_at|tz8 }}</div>
+    <div>结束：{{ run.finished_at|tz8 }}</div>
+  </div>
+  <div class="row" style="margin-top: 10px;">
+    <div class="kpi"><div class="label">目标数</div><div class="value">{{ run.target_count }}</div></div>
+    <div class="kpi"><div class="label">建议数</div><div class="value">{{ run.suggestion_count }}</div></div>
+    <div class="kpi"><div class="label">需复核</div><div class="value">{{ run.needs_review_count }}</div></div>
+    <div class="kpi"><div class="label">失败数</div><div class="value">{{ run.failure_count }}</div></div>
+  </div>
+</div>
+
+<div class="panel">
+  <h3>步骤输出</h3>
+  <table>
+    <thead>
+      <tr>
+        <th>时间</th>
+        <th>步骤</th>
+        <th>状态</th>
+        <th>信息</th>
+        <th>详情</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for e in events %}
+      <tr>
+        <td>{{ e.created_at|tz8 }}</td>
+        <td>{{ e.step|step_zh }}</td>
+        <td><span class="badge status-{{ e.status }}">{{ e.status|status_zh }}</span></td>
+        <td>{{ e.message }}</td>
+        <td class="code">{{ e.detail_json }}</td>
+      </tr>
+      {% else %}
+      <tr><td colspan="5" class="muted">暂无步骤日志。</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<div class="panel">
+  <h3>本批次建议</h3>
+  <table>
+    <thead>
+      <tr>
+        <th>建议</th>
+        <th>错题</th>
+        <th>状态</th>
+        <th>置信度</th>
+        <th>更新时间</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for s in suggestions %}
+      <tr>
+        <td><a href="/suggestions/{{ s.suggestion_id }}">#{{ s.suggestion_id }}</a></td>
+        <td>{{ s.error_title }}</td>
+        <td><span class="badge status-{{ s.status }}">{{ s.status|status_zh }}</span></td>
+        <td>{{ '%.2f'|format(s.confidence or 0) }}</td>
+        <td>{{ s.updated_at|tz8 }}</td>
+      </tr>
+      {% else %}
+      <tr><td colspan="5" class="muted">暂无建议。</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

@@ -1,0 +1,97 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="panel">
+  <h2>知识库整理工作流</h2>
+  {% if run_notice %}
+  <div class="muted" style="margin-bottom: 8px;color:#1a9a55;">
+    {{ run_notice }}
+  </div>
+  {% endif %}
+  {% if run_error %}
+  <div class="muted" style="margin-bottom: 8px;color:#b32522;">
+    工作流执行失败：{{ run_error }}
+  </div>
+  {% endif %}
+  {% if bootstrap_error %}
+  <div class="muted" style="margin-bottom: 8px;color:#b32522;">
+    {{ bootstrap_error }}
+  </div>
+  {% endif %}
+  <div class="row muted" style="margin-bottom: 10px;">
+    <div>模型：<strong>{{ model }}</strong></div>
+    <div>低置信度阈值：<strong>{{ '%.2f'|format(threshold) }}</strong></div>
+    <div>待处理统计缓存：{{ '命中' if pending_from_cache else '实时计算' }}（{{ pending_cache_ttl_seconds }} 秒）</div>
+    <form method="post" action="/knowledge/dashboard/refresh">
+      <button class="btn secondary js-long-task" data-loading-text="刷新中..." type="submit">刷新待处理统计</button>
+    </form>
+    <a class="btn secondary" href="/knowledge/suggestions">进入复核队列</a>
+  </div>
+  <form method="post" action="/knowledge/workflow/run" class="row">
+    <div class="run-limit-field">
+      <label class="run-limit-label">本次处理上限（0 表示全部）</label>
+      <input type="number" name="limit" value="20" min="0" />
+    </div>
+    <div style="padding-top: 21px;">
+      <button class="btn js-long-task" data-loading-text="运行中..." type="submit">运行知识库整理 Agent</button>
+    </div>
+  </form>
+</div>
+
+<div class="panel">
+  <h3>当前状态</h3>
+  <div class="muted" style="margin-bottom: 8px;">
+    说明：运行 Agent 只会生成“复核建议”；Notion 详情页会在你进入复核队列并执行“批量确认并回写 Notion”后更新。
+  </div>
+  <div class="row">
+    <div class="kpi"><div class="label">待处理记录</div><div class="value">{{ pending_targets }}</div></div>
+    <div class="kpi"><div class="label">待复核</div><div class="value">{{ pending_review }}</div></div>
+    <div class="kpi"><div class="label">需人工复核</div><div class="value">{{ needs_review }}</div></div>
+    <div class="kpi"><div class="label">已应用</div><div class="value">{{ applied }}</div></div>
+  </div>
+</div>
+
+<div class="panel">
+  <h3>最近运行记录</h3>
+  <table>
+    <thead>
+      <tr>
+        <th>批次</th>
+        <th>状态</th>
+        <th>目标数</th>
+        <th>建议数</th>
+        <th>需复核</th>
+        <th>失败数</th>
+        <th>开始时间</th>
+        <th>摘要</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for row in runs %}
+      <tr>
+        <td><a href="/knowledge/runs/{{ row.run_id }}">#{{ row.run_id }}</a></td>
+        <td><span class="badge status-{{ row.status }}">{{ row.status|status_zh }}</span></td>
+        <td>{{ row.target_count }}</td>
+        <td>{{ row.suggestion_count }}</td>
+        <td>{{ row.needs_review_count }}</td>
+        <td>{{ row.failure_count }}</td>
+        <td>{{ row.started_at|tz8 }}</td>
+        <td>{{ row.summary }}</td>
+      </tr>
+      {% else %}
+      <tr><td colspan="8" class="muted">暂无运行记录。</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  <div class="row" style="justify-content: space-between; margin-top: 10px;">
+    <div class="muted">第 {{ runs_page }} / {{ runs_total_pages }} 页，共 {{ runs_total }} 条</div>
+    <div class="row">
+      {% if runs_page > 1 %}
+      <a class="btn secondary" href="/knowledge?runs_page={{ runs_page - 1 }}">上一页</a>
+      {% endif %}
+      {% if runs_page < runs_total_pages %}
+      <a class="btn secondary" href="/knowledge?runs_page={{ runs_page + 1 }}">下一页</a>
+      {% endif %}
+    </div>
+  </div>
+</div>
+{% endblock %}

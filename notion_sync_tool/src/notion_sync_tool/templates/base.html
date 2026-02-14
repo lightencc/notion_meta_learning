@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>{{ title or "Notion 学习库助手" }}</title>
+  <style>
+    :root {
+      color-scheme: light dark;
+      --bg: #f5f7fb;
+      --bg-grad-top: #edf2ff;
+      --panel: #ffffff;
+      --text: #1d2533;
+      --muted: #5f6b82;
+      --line: #dde3ee;
+      --primary: #1f78ff;
+      --warning: #ff8c3b;
+      --danger: #d43f3a;
+      --success: #1a9a55;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: "SF Pro Text", "PingFang SC", "Microsoft YaHei", sans-serif;
+      background: linear-gradient(180deg, var(--bg-grad-top) 0%, var(--bg) 30%);
+      color: var(--text);
+    }
+    .container {
+      width: min(1200px, 96vw);
+      margin: 24px auto 40px;
+    }
+    .topbar {
+      display: flex;
+      gap: 14px;
+      align-items: center;
+      margin-bottom: 16px;
+    }
+    .topbar a {
+      color: var(--primary);
+      text-decoration: none;
+      font-weight: 600;
+      padding: 6px 10px;
+      border-radius: 8px;
+    }
+    .topbar a.active {
+      background: rgba(31, 120, 255, 0.12);
+    }
+    .panel {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 14px;
+      margin-bottom: 12px;
+    }
+    .panel h2, .panel h3 {
+      margin: 0 0 10px;
+      font-size: 16px;
+    }
+    .row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      align-items: center;
+    }
+    .kpi {
+      min-width: 150px;
+      background: #f8fbff;
+      border: 1px solid #dce8ff;
+      border-radius: 10px;
+      padding: 10px;
+    }
+    .kpi .label { color: var(--muted); font-size: 12px; }
+    .kpi .value { font-size: 22px; font-weight: 700; }
+    .muted { color: var(--muted); }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13px;
+    }
+    th, td {
+      border-bottom: 1px solid var(--line);
+      text-align: left;
+      padding: 8px 6px;
+      vertical-align: top;
+    }
+    th { color: var(--muted); font-weight: 600; }
+    input, select, textarea {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 8px;
+      width: 100%;
+      font-size: 13px;
+      background: #fff;
+    }
+    textarea { min-height: 90px; }
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      border: 0;
+      border-radius: 8px;
+      padding: 8px 12px;
+      font-weight: 600;
+      cursor: pointer;
+      color: #fff;
+      background: var(--primary);
+      text-decoration: none;
+    }
+    .btn:disabled {
+      opacity: 0.75;
+      cursor: not-allowed;
+    }
+    .btn.is-loading { opacity: 0.9; }
+    .spinner {
+      display: inline-block;
+      width: 13px;
+      height: 13px;
+      border: 2px solid rgba(255,255,255,0.35);
+      border-top-color: rgba(255,255,255,0.95);
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+    .btn.secondary { background: #7b879f; }
+    .btn.warn { background: var(--warning); }
+    .btn.danger { background: var(--danger); }
+    .btn.success { background: var(--success); }
+    .grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+    }
+    .run-limit-field {
+      width: 260px;
+      min-width: 260px;
+    }
+    .run-limit-label {
+      white-space: nowrap;
+    }
+    .code {
+      font-family: ui-monospace, Menlo, Consolas, monospace;
+      white-space: pre-wrap;
+      background: #f6f8fc;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 10px;
+      font-size: 12px;
+      max-height: 420px;
+      overflow: auto;
+    }
+    .badge {
+      display: inline-block;
+      font-size: 11px;
+      padding: 2px 8px;
+      border-radius: 999px;
+      background: #e7eefc;
+      color: #2f4f8f;
+    }
+    .status-needs_review { background: #ffe9db; color: #8c4a07; }
+    .status-pending_review { background: #e6f2ff; color: #0d4f9e; }
+    .status-applied { background: #ddf5e8; color: #0f6b3d; }
+    .status-failed { background: #fde3e3; color: #8f1d1b; }
+    .status-running { background: #e6f2ff; color: #0d4f9e; }
+    .status-completed { background: #ddf5e8; color: #0f6b3d; }
+    .status-rejected { background: #edf1f7; color: #465064; }
+    .status-needs_sync { background: #fff3d6; color: #8a5a00; }
+    .status-up_to_date { background: #ddf5e8; color: #0f6b3d; }
+    .status-unknown { background: #edf1f7; color: #465064; }
+    @keyframes spin {
+      from { transform: rotate(0deg); }
+      to { transform: rotate(360deg); }
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #111722;
+        --bg-grad-top: #182235;
+        --panel: #1a2435;
+        --text: #ecf1fb;
+        --muted: #9eabc2;
+        --line: #2a3750;
+        --primary: #5aa2ff;
+        --warning: #f9a34d;
+        --danger: #ef6c67;
+        --success: #45bf7a;
+      }
+      .kpi {
+        background: #1c2a41;
+        border-color: #2b4266;
+      }
+      .topbar a.active {
+        background: rgba(90, 162, 255, 0.2);
+      }
+      input, select, textarea {
+        background: #111b2b;
+        color: var(--text);
+        border-color: var(--line);
+      }
+      .code {
+        background: #111b2b;
+        border-color: var(--line);
+      }
+      .badge {
+        background: #2a3750;
+        color: #b8cef7;
+      }
+      .status-needs_review { background: #43301f; color: #ffca94; }
+      .status-pending_review { background: #213b5f; color: #acd1ff; }
+      .status-applied { background: #1f3e31; color: #92dfbb; }
+      .status-failed { background: #4a2323; color: #ffb3b0; }
+      .status-running { background: #213b5f; color: #acd1ff; }
+      .status-completed { background: #1f3e31; color: #92dfbb; }
+      .status-rejected { background: #2a3345; color: #c1cada; }
+      .status-needs_sync { background: #44361f; color: #ffcf94; }
+      .status-up_to_date { background: #1f3e31; color: #92dfbb; }
+      .status-unknown { background: #2a3345; color: #c1cada; }
+    }
+    @media (max-width: 900px) {
+      .grid { grid-template-columns: 1fr; }
+      .run-limit-field {
+        width: 100%;
+        min-width: 0;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="topbar">
+      <a href="/knowledge" class="{% if active_tab == 'knowledge' %}active{% endif %}">知识库整理</a>
+      <a href="/errors" class="{% if active_tab == 'errors' %}active{% endif %}">错题检查</a>
+    </div>
+    {% block content %}{% endblock %}
+  </div>
+  <script>
+    function applyLoadingState(button) {
+      if (!button || button.dataset.loadingApplied === "1") return;
+      button.dataset.loadingApplied = "1";
+      const loadingText = button.getAttribute("data-loading-text") || "处理中...";
+      button.dataset.originalHtml = button.innerHTML;
+      button.classList.add("is-loading");
+      button.disabled = true;
+      button.innerHTML = '<span class="spinner" aria-hidden="true"></span><span>' + loadingText + '</span>';
+    }
+
+    document.addEventListener("submit", function(event) {
+      let submitter = event.submitter;
+      if (!submitter && event.target instanceof HTMLFormElement) {
+        submitter = event.target.querySelector("button[type='submit'].js-long-task");
+      }
+      if (submitter && event.target instanceof HTMLFormElement) {
+        const name = submitter.getAttribute("name");
+        const value = submitter.getAttribute("value");
+        if (name && value) {
+          const hidden = document.createElement("input");
+          hidden.type = "hidden";
+          hidden.name = name;
+          hidden.value = value;
+          event.target.appendChild(hidden);
+        }
+      }
+      if (submitter && submitter.classList.contains("js-long-task")) {
+        applyLoadingState(submitter);
+      }
+    });
+  </script>
+</body>
+</html>

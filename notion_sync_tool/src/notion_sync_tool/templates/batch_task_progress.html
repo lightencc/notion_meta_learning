@@ -1,0 +1,87 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="panel">
+  <h2>{{ task_title }}</h2>
+  <div class="muted" style="margin-bottom:10px;">任务 ID：<span class="code" style="padding:2px 6px;max-height:none;">{{ task_id }}</span></div>
+  <div class="row" style="margin-bottom:10px;">
+    <div class="kpi">
+      <div class="label">状态</div>
+      <div class="value" id="task-status" style="font-size:18px;">运行中</div>
+    </div>
+    <div class="kpi">
+      <div class="label">已处理</div>
+      <div class="value"><span id="processed-count">0</span>/<span id="total-count">0</span></div>
+    </div>
+    <div class="kpi">
+      <div class="label">成功</div>
+      <div class="value" id="success-count">0</div>
+    </div>
+    <div class="kpi">
+      <div class="label">失败</div>
+      <div class="value" id="failed-count">0</div>
+    </div>
+  </div>
+  <div style="border:1px solid var(--line);border-radius:10px;overflow:hidden;background:rgba(127,127,127,0.12);margin:8px 0 12px;">
+    <div id="progress-bar" style="height:14px;width:0%;background:var(--primary);transition:width .25s ease;"></div>
+  </div>
+  <div class="muted" id="task-message">正在启动任务...</div>
+  <div class="muted" id="current-item" style="margin-top:6px;">当前记录：-</div>
+  <div class="muted" id="last-error" style="margin-top:6px;color:#b32522;"></div>
+  <div class="row" style="margin-top:14px;">
+    <a class="btn secondary" href="{{ back_url }}">返回复核队列</a>
+  </div>
+</div>
+
+<script>
+  const statusUrl = {{ status_url|tojson }};
+  const doneRedirectUrl = {{ done_redirect_url|tojson }};
+  let redirected = false;
+
+  function toPercent(processed, total) {
+    if (!total || total <= 0) return 0;
+    return Math.max(0, Math.min(100, Math.round((processed / total) * 100)));
+  }
+
+  function statusToText(status) {
+    if (status === "completed") return "已完成";
+    if (status === "failed") return "失败";
+    if (status === "running") return "运行中";
+    return status || "-";
+  }
+
+  async function refreshStatus() {
+    try {
+      const resp = await fetch(statusUrl, { cache: "no-store" });
+      if (!resp.ok) return;
+      const data = await resp.json();
+      const processed = Number(data.processed || 0);
+      const total = Number(data.total || 0);
+      const success = Number(data.success || 0);
+      const failed = Number(data.failed || 0);
+      const pct = toPercent(processed, total);
+
+      document.getElementById("task-status").textContent = statusToText(data.status);
+      document.getElementById("processed-count").textContent = String(processed);
+      document.getElementById("total-count").textContent = String(total);
+      document.getElementById("success-count").textContent = String(success);
+      document.getElementById("failed-count").textContent = String(failed);
+      document.getElementById("progress-bar").style.width = pct + "%";
+      document.getElementById("task-message").textContent = data.message || "";
+      const title = (data.current_item_title || "").trim();
+      const currentId = data.current_item_id ? ("#" + data.current_item_id) : "";
+      document.getElementById("current-item").textContent = "当前记录：" + (currentId || title ? (currentId + (title ? (" " + title) : "")) : "-");
+      document.getElementById("last-error").textContent = data.last_error ? ("最近错误：" + data.last_error) : "";
+
+      if (!redirected && (data.status === "completed" || data.status === "failed")) {
+        redirected = true;
+        setTimeout(() => { window.location.href = doneRedirectUrl; }, 900);
+      }
+    } catch (error) {
+      document.getElementById("task-message").textContent = "进度拉取失败，请稍后重试。";
+    }
+  }
+
+  refreshStatus();
+  setInterval(refreshStatus, 1000);
+</script>
+{% endblock %}
