@@ -1,0 +1,19 @@
+/notion_import
+/screenshot
+*.doc
+*.docx
+*.pdf
+/昂立四年级上册---秋季
+.venv*/
+.env
+/docs
+
+# Local OS / tooling noise
+.DS_Store
+**/.DS_Store
+*.egg-info/
+
+# Local-only notes / outputs
+CLAUDE.md
+notion_setup_output.json
+/scripts
