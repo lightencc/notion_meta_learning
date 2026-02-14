@@ -1,72 +1,121 @@
 {% extends "base.html" %}
+
 {% block content %}
+<div class="page-header">
+  <div class="breadcrumb">
+    <span>首页</span>
+    <span class="text-muted">/</span>
+    <a href="/errors">错题检查</a>
+    <span class="text-muted">/</span>
+    <span>复核队列</span>
+  </div>
+  <h1 class="page-title">错题复核队列</h1>
+</div>
+
 <div class="panel">
-  <h2>错题复核队列</h2>
-  {% if batch_notice %}
-  <div class="muted" style="margin-bottom: 8px;color:#1a9a55;">
-    {{ batch_notice }}
+  <div class="row justify-between items-center mb-4">
+    <div class="row items-center gap-4">
+      <form method="get" action="/suggestions" class="flex items-center gap-2">
+        <label class="text-sm font-medium whitespace-nowrap">状态:</label>
+        <select name="status" onchange="this.form.submit()" style="width: 180px;">
+          {% for value in ['all', 'pending_review', 'needs_review', 'applied', 'rejected', 'failed'] %}
+          <option value="{{ value }}" {% if status==value %}selected{% endif %}>{{ value|status_zh }}</option>
+          {% endfor %}
+        </select>
+      </form>
+    </div>
+
+    {% if batch_notice %}<div class="badge status-completed">{{ batch_notice }}</div>{% endif %}
+    {% if batch_error %}<div class="badge status-failed">{{ batch_error }}</div>{% endif %}
   </div>
-  {% endif %}
-  {% if batch_error %}
-  <div class="muted" style="margin-bottom: 8px;color:#b32522;">
-    {{ batch_error }}
-  </div>
-  {% endif %}
-  <form method="get" action="/suggestions" class="row" style="max-width: 340px;">
-    <div>
-      <label>状态筛选</label>
-      <select name="status" onchange="this.form.submit()">
-        {% for value in ['all', 'pending_review', 'needs_review', 'applied', 'rejected', 'failed'] %}
-        <option value="{{ value }}" {% if status == value %}selected{% endif %}>{{ value|status_zh }}</option>
-        {% endfor %}
-      </select>
+
+  <form method="post" action="/suggestions/batch">
+    <input type="hidden" name="status" value="{{ status }}" />
+
+    <div class="bg-body p-4 rounded border border-color mb-4">
+      <div class="row items-center gap-4">
+        <div class="flex-1">
+          <input type="text" name="reviewer_note" placeholder="批量操作备注 (例如：已复核无误)" />
+        </div>
+        <div class="row gap-2">
+          <button class="btn warning js-long-task" data-loading-text="处理中..." type="submit" name="action"
+            value="regenerate_apply">
+            <svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M23 4v6h-6"></path>
+              <path d="M1 20v-6h6"></path>
+              <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>
+            </svg>
+            重新生成并应用
+          </button>
+          <button class="btn success js-long-task" data-loading-text="批准中..." type="submit" name="action"
+            value="approve">
+            <svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <polyline points="20 6 9 17 4 12"></polyline>
+            </svg>
+            批准并写入
+          </button>
+          <button class="btn danger" type="submit" name="action" value="reject">
+            <svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <line x1="18" y1="6" x2="6" y2="18"></line>
+              <line x1="6" y1="6" x2="18" y2="18"></line>
+            </svg>
+            拒绝
+          </button>
+          <button class="btn secondary" type="submit" name="action" value="pending">
+            重置为待处理
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <div class="table-container">
+      <table>
+        <thead>
+          <tr>
+            <th style="width: 40px;"><input type="checkbox" id="select-all" onclick="toggleAll(this)"
+                style="width:auto;margin:0;" /></th>
+            <th style="width: 80px;">ID</th>
+            <th>原始错题标题</th>
+            <th>状态</th>
+            <th>置信度</th>
+            <th>建议标题</th>
+            <th style="width: 160px;">更新时间</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for row in suggestions %}
+          <tr>
+            <td><input type="checkbox" name="suggestion_ids" value="{{ row.suggestion_id }}" class="row-check"
+                style="width:auto;margin:0;" /></td>
+            <td><a href="/suggestions/{{ row.suggestion_id }}"
+                class="text-primary font-mono font-medium hover:underline">#{{ row.suggestion_id }}</a></td>
+            <td class="font-medium text-main">{{ row.error_title }}</td>
+            <td><span class="badge status-{{ row.status }}">{{ row.status|status_zh }}</span></td>
+            <td>
+              <div class="flex items-center gap-2">
+                <div
+                  style="width: 60px; height: 4px; background: var(--border-color); border-radius: 99px; overflow: hidden;">
+                  <div
+                    style="width: {{ (row.confidence or 0) * 100 }}%; height: 100%; background: var(--{{ 'success-text' if (row.confidence or 0) > 0.8 else ('warning-text' if (row.confidence or 0) > 0.5 else 'danger-text') }});">
+                  </div>
+                </div>
+                <span class="text-sm text-muted">{{ '%.2f'|format(row.confidence or 0) }}</span>
+              </div>
+            </td>
+            <td class="text-muted">{{ row.proposed_title or '-' }}</td>
+            <td class="text-sm text-muted">{{ row.updated_at|tz8 }}</td>
+          </tr>
+          {% else %}
+          <tr>
+            <td colspan="7" class="text-center py-8 text-muted">队列中暂无建议。</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
     </div>
   </form>
 </div>
 
-<div class="panel">
-  <form method="post" action="/suggestions/batch">
-    <input type="hidden" name="status" value="{{ status }}" />
-    <div class="row" style="margin-bottom: 10px;">
-      <div style="min-width: 220px;">
-        <label>复核备注（批量）</label>
-        <input type="text" name="reviewer_note" placeholder="例如：批量通过，已抽查" />
-      </div>
-      <button class="btn warn js-long-task" data-loading-text="重生成并回写中..." type="submit" name="action" value="regenerate_apply">批量重新生成并回写 Notion</button>
-      <button class="btn success js-long-task" data-loading-text="批量回写中..." type="submit" name="action" value="approve">批量确认并回写 Notion</button>
-      <button class="btn danger" type="submit" name="action" value="reject">批量驳回</button>
-      <button class="btn secondary" type="submit" name="action" value="pending">批量改为待复核</button>
-    </div>
-    <table>
-      <thead>
-        <tr>
-          <th><input style="width:auto;" type="checkbox" id="select-all" onclick="toggleAll(this)" /></th>
-          <th>ID</th>
-          <th>错题标题</th>
-          <th>状态</th>
-          <th>置信度</th>
-          <th>建议标题</th>
-          <th>更新时间</th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for row in suggestions %}
-        <tr>
-          <td><input style="width:auto;" type="checkbox" name="suggestion_ids" value="{{ row.suggestion_id }}" class="row-check" /></td>
-          <td><a href="/suggestions/{{ row.suggestion_id }}">#{{ row.suggestion_id }}</a></td>
-          <td>{{ row.error_title }}</td>
-          <td><span class="badge status-{{ row.status }}">{{ row.status|status_zh }}</span></td>
-          <td>{{ '%.2f'|format(row.confidence or 0) }}</td>
-          <td>{{ row.proposed_title or '-' }}</td>
-          <td>{{ row.updated_at|tz8 }}</td>
-        </tr>
-        {% else %}
-        <tr><td colspan="7" class="muted">暂无建议。</td></tr>
-        {% endfor %}
-      </tbody>
-    </table>
-  </form>
-</div>
 <script>
   function toggleAll(source) {
     const checked = source.checked;

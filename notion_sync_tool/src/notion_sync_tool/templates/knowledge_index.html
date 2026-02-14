@@ -1,96 +1,145 @@
 {% extends "base.html" %}
+
 {% block content %}
-<div class="panel">
-  <h2>知识库整理工作流</h2>
-  {% if run_notice %}
-  <div class="muted" style="margin-bottom: 8px;color:#1a9a55;">
-    {{ run_notice }}
+<div class="page-header">
+  <div class="breadcrumb">
+    <span>首页</span>
+    <span class="text-muted">/</span>
+    <span>知识库</span>
   </div>
-  {% endif %}
-  {% if run_error %}
-  <div class="muted" style="margin-bottom: 8px;color:#b32522;">
-    工作流执行失败：{{ run_error }}
-  </div>
-  {% endif %}
-  {% if bootstrap_error %}
-  <div class="muted" style="margin-bottom: 8px;color:#b32522;">
-    {{ bootstrap_error }}
-  </div>
-  {% endif %}
-  <div class="row muted" style="margin-bottom: 10px;">
-    <div>模型：<strong>{{ model }}</strong></div>
-    <div>低置信度阈值：<strong>{{ '%.2f'|format(threshold) }}</strong></div>
-    <div>待处理统计缓存：{{ '命中' if pending_from_cache else '实时计算' }}（{{ pending_cache_ttl_seconds }} 秒）</div>
-    <form method="post" action="/knowledge/dashboard/refresh">
-      <button class="btn secondary js-long-task" data-loading-text="刷新中..." type="submit">刷新待处理统计</button>
+  <h1 class="page-title">知识库整理工作台</h1>
+</div>
+
+<div class="grid grid-2">
+  <!-- Workflow Configuration -->
+  <div class="panel">
+    <div class="row justify-between mb-4">
+      <h2>知识库 Agent Workflow</h2>
+      <form method="post" action="/knowledge/dashboard/refresh">
+        <button class="btn secondary text-sm js-long-task" data-loading-text="刷新中..." type="submit">
+          刷新统计
+        </button>
+      </form>
+    </div>
+
+    {% if run_notice %}<div class="badge status-completed mb-4 w-full">{{ run_notice }}</div>{% endif %}
+    {% if run_error %}<div class="badge status-failed mb-4 w-full">Workflow Error: {{ run_error }}</div>{% endif %}
+    {% if bootstrap_error %}<div class="badge status-failed mb-4 w-full">{{ bootstrap_error }}</div>{% endif %}
+
+    <div class="grid grid-2 mb-4">
+      <div class="kpi">
+        <div class="label">当前模型</div>
+        <div class="value" style="font-size:16px;">{{ model }}</div>
+      </div>
+      <div class="kpi">
+        <div class="label">置信度阈值</div>
+        <div class="value">{{ '%.2f'|format(threshold) }}</div>
+      </div>
+    </div>
+
+    <div class="text-sm text-muted mb-4">
+      待处理统计缓存: {{ 'Hit' if pending_from_cache else 'Live' }} ({{ pending_cache_ttl_seconds }}s)
+    </div>
+
+    <form method="post" action="/knowledge/workflow/run">
+      <fieldset>
+        <legend>Run Configuration</legend>
+        <div class="row items-center gap-4">
+          <div class="flex-1">
+            <label>Limit (0 = All)</label>
+            <input type="number" name="limit" value="20" min="0" />
+          </div>
+          <div style="padding-top: 24px;">
+            <button class="btn primary js-long-task" data-loading-text="Running Agent..." type="submit">
+              <svg style="width:16px;height:16px;" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                stroke-width="2">
+                <polygon points="5 3 19 12 5 21 5 3"></polygon>
+              </svg>
+              启动整理
+            </button>
+          </div>
+        </div>
+      </fieldset>
     </form>
-    <a class="btn secondary" href="/knowledge/suggestions">进入复核队列</a>
   </div>
-  <form method="post" action="/knowledge/workflow/run" class="row">
-    <div class="run-limit-field">
-      <label class="run-limit-label">本次处理上限（0 表示全部）</label>
-      <input type="number" name="limit" value="20" min="0" />
+
+  <!-- Status Overview -->
+  <div class="panel">
+    <h2>当前状态</h2>
+    <div class="text-sm text-muted mb-4 bg-body p-3 rounded border border-color">
+      ℹ️ <strong>Note:</strong> Running the Agent only generates "Review Suggestions". Notion pages will only be updated
+      after you "Approve & Apply" in the review queue.
     </div>
-    <div style="padding-top: 21px;">
-      <button class="btn js-long-task" data-loading-text="运行中..." type="submit">运行知识库整理 Agent</button>
+
+    <div class="grid grid-2 mb-4">
+      <div class="kpi warning">
+        <div class="label">待处理记录</div>
+        <div class="value">{{ pending_targets }}</div>
+      </div>
+      <div class="kpi">
+        <div class="label">待复核生成</div>
+        <div class="value">{{ pending_review }}</div>
+      </div>
+      <div class="kpi danger">
+        <div class="label">需人工介入</div>
+        <div class="value">{{ needs_review }}</div>
+      </div>
+      <div class="kpi success">
+        <div class="label">已应用</div>
+        <div class="value">{{ applied }}</div>
+      </div>
     </div>
-  </form>
+
+    <div class="row">
+      <a class="btn primary flex-1" href="/knowledge/suggestions">
+        进入复核队列
+      </a>
+    </div>
+  </div>
 </div>
 
+<!-- Recent Runs -->
 <div class="panel">
-  <h3>当前状态</h3>
-  <div class="muted" style="margin-bottom: 8px;">
-    说明：运行 Agent 只会生成“复核建议”；Notion 详情页会在你进入复核队列并执行“批量确认并回写 Notion”后更新。
+  <h2>最近运行记录</h2>
+  <div class="table-container">
+    <table>
+      <thead>
+        <tr>
+          <th>批次 ID</th>
+          <th>状态</th>
+          <th>目标/建议/失败</th>
+          <th>开始时间</th>
+          <th>摘要</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in runs %}
+        <tr>
+          <td><a href="/knowledge/runs/{{ row.run_id }}" class="text-primary font-mono font-medium hover:underline">#{{
+              row.run_id }}</a></td>
+          <td><span class="badge status-{{ row.status }}">{{ row.status|status_zh }}</span></td>
+          <td>{{ row.target_count }} / {{ row.suggestion_count }} / {{ row.failure_count }}</td>
+          <td class="code text-sm">{{ row.started_at|tz8 }}</td>
+          <td class="text-muted text-sm">{{ row.summary or '-' }}</td>
+        </tr>
+        {% else %}
+        <tr>
+          <td colspan="5" class="text-center py-8 text-muted">暂无运行记录</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
   </div>
-  <div class="row">
-    <div class="kpi"><div class="label">待处理记录</div><div class="value">{{ pending_targets }}</div></div>
-    <div class="kpi"><div class="label">待复核</div><div class="value">{{ pending_review }}</div></div>
-    <div class="kpi"><div class="label">需人工复核</div><div class="value">{{ needs_review }}</div></div>
-    <div class="kpi"><div class="label">已应用</div><div class="value">{{ applied }}</div></div>
-  </div>
-</div>
 
-<div class="panel">
-  <h3>最近运行记录</h3>
-  <table>
-    <thead>
-      <tr>
-        <th>批次</th>
-        <th>状态</th>
-        <th>目标数</th>
-        <th>建议数</th>
-        <th>需复核</th>
-        <th>失败数</th>
-        <th>开始时间</th>
-        <th>摘要</th>
-      </tr>
-    </thead>
-    <tbody>
-      {% for row in runs %}
-      <tr>
-        <td><a href="/knowledge/runs/{{ row.run_id }}">#{{ row.run_id }}</a></td>
-        <td><span class="badge status-{{ row.status }}">{{ row.status|status_zh }}</span></td>
-        <td>{{ row.target_count }}</td>
-        <td>{{ row.suggestion_count }}</td>
-        <td>{{ row.needs_review_count }}</td>
-        <td>{{ row.failure_count }}</td>
-        <td>{{ row.started_at|tz8 }}</td>
-        <td>{{ row.summary }}</td>
-      </tr>
-      {% else %}
-      <tr><td colspan="8" class="muted">暂无运行记录。</td></tr>
-      {% endfor %}
-    </tbody>
-  </table>
-  <div class="row" style="justify-content: space-between; margin-top: 10px;">
-    <div class="muted">第 {{ runs_page }} / {{ runs_total_pages }} 页，共 {{ runs_total }} 条</div>
+  <div class="row justify-between mt-4">
+    <div class="text-sm text-muted">Page {{ runs_page }} of {{ runs_total_pages }} (Total: {{ runs_total }})</div>
     <div class="row">
       {% if runs_page > 1 %}
-      <a class="btn secondary" href="/knowledge?runs_page={{ runs_page - 1 }}">上一页</a>
+      <a class="btn secondary text-sm" href="/knowledge?runs_page={{ runs_page - 1 }}">Previous</a>
       {% endif %}
-      {% if runs_page < runs_total_pages %}
-      <a class="btn secondary" href="/knowledge?runs_page={{ runs_page + 1 }}">下一页</a>
-      {% endif %}
+      {% if runs_page < runs_total_pages %} <a class="btn secondary text-sm"
+        href="/knowledge?runs_page={{ runs_page + 1 }}">Next</a>
+        {% endif %}
     </div>
   </div>
 </div>

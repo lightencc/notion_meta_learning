@@ -1,342 +1,451 @@
 {% extends "base.html" %}
+
 {% block content %}
+<div class="page-header">
+  <div class="breadcrumb">
+    <span>首页</span>
+    <span class="text-muted">/</span>
+    <span>仪表盘</span>
+  </div>
+  <h1 class="page-title">错题检查工作台</h1>
+</div>
+
+<!-- Sync Status Section -->
 <div class="panel">
-  <h2>同步状态</h2>
-  {% if sync_notice %}
-  <div class="muted" style="margin-bottom: 8px;color:#1a9a55;">
-    {{ sync_notice }}
-  </div>
-  {% endif %}
-  {% if batch_notice %}
-  <div class="muted" style="margin-bottom: 8px;color:#1a9a55;">
-    {{ batch_notice }}
-  </div>
-  {% endif %}
-  {% if sync_error %}
-  <div class="muted" style="margin-bottom: 8px;color:#b32522;">
-    {{ sync_error }}
-  </div>
-  {% endif %}
-  {% if sync_status.global_error %}
-  <div class="muted" style="margin-bottom: 8px;color:#b32522;">
-    同步检查警告：{{ sync_status.global_error }}
-  </div>
-  {% endif %}
-  <div class="row muted" style="margin-bottom: 10px;">
-    <div>检查时间(东八区)：<strong>{{ sync_status.checked_at|tz8 }}</strong></div>
-    <div>待同步：<span class="badge status-{{ 'needs_sync' if sync_status.has_updates else 'up_to_date' }}">{{ ('needs_sync' if sync_status.has_updates else 'up_to_date')|status_zh }}</span></div>
-    <div>缓存：{{ '命中' if sync_status_from_cache else '实时计算' }}（{{ sync_cache_ttl_seconds }} 秒）</div>
+  <div class="row justify-between mb-4">
+    <div>
+      <h2>Notion 同步状态</h2>
+      <div class="text-muted text-sm">
+        最后检查: <strong>{{ sync_status.checked_at|tz8 }}</strong> |
+        缓存: {{ '命中' if sync_status_from_cache else '实时' }} ({{ sync_cache_ttl_seconds }}s)
+      </div>
+    </div>
     <form method="post" action="/dashboard/refresh">
       <input type="hidden" name="target" value="sync" />
-      <button class="btn secondary js-long-task" data-loading-text="刷新中..." type="submit">刷新同步状态</button>
+      <button class="btn secondary text-sm js-long-task" data-loading-text="刷新中..." type="submit">
+        <svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M23 4v6h-6"></path>
+          <path d="M1 20v-6h6"></path>
+          <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>
+        </svg>
+        刷新状态
+      </button>
     </form>
   </div>
-  <table>
-    <thead>
-      <tr>
-        <th>库名</th>
-        <th>本地同步时间</th>
-        <th>本地页数</th>
-        <th>远端页数</th>
-        <th>远端最新编辑</th>
-        <th>状态</th>
-        <th>说明</th>
-      </tr>
-    </thead>
-    <tbody>
-      {% for row in sync_status.rows %}
-      <tr>
-        <td>{{ row.logical_db }}</td>
-        <td>{{ row.local_synced_at|tz8 }}</td>
-        <td>{{ row.local_page_count }}</td>
-        <td>{{ row.remote_page_count if row.remote_page_count is not none else '-' }}</td>
-        <td>{{ row.remote_latest_edited|tz8 }}</td>
-        <td><span class="badge status-{{ row.status }}">{{ row.status|status_zh }}</span></td>
-        <td>{{ row.note or '-' }}</td>
-      </tr>
-      {% else %}
-      <tr><td colspan="7" class="muted">暂无同步记录。</td></tr>
-      {% endfor %}
-    </tbody>
-  </table>
 
-  <form method="post" action="/sync/run" class="row" style="margin-top: 10px;">
-    <div style="min-width: 200px;">
-      <label>同步页面正文</label>
-      <label class="muted" style="display:flex;align-items:center;gap:8px;">
-        <input style="width:auto;" type="checkbox" name="include_page_content" checked />
-        抓取 block 内容到 `plain_text`
-      </label>
-    </div>
-    <div style="width: 140px;">
-      <label>最大字符</label>
-      <input type="number" name="content_max_chars" value="1600" min="200" />
-    </div>
-    <div style="width: 140px;">
-      <label>最大深度</label>
-      <input type="number" name="content_max_depth" value="2" min="1" max="5" />
-    </div>
-    <div style="width: 140px;">
-      <label>分页大小</label>
-      <input type="number" name="page_size" value="100" min="10" max="100" />
-    </div>
-    <div style="padding-top: 21px;">
-      <button class="btn js-long-task" data-loading-text="同步中..." type="submit">手动同步 Notion 到 PostgreSQL</button>
+  {% if sync_notice %}<div class="badge status-completed mb-4">{{ sync_notice }}</div>{% endif %}
+  {% if batch_notice %}<div class="badge status-completed mb-4">{{ batch_notice }}</div>{% endif %}
+  {% if sync_error %}<div class="badge status-failed mb-4">{{ sync_error }}</div>{% endif %}
+  {% if sync_status.global_error %}<div class="badge status-failed mb-4">Sync Warning: {{ sync_status.global_error }}
+  </div>{% endif %}
+
+  <div class="table-container mb-4">
+    <table>
+      <thead>
+        <tr>
+          <th>库名</th>
+          <th>本地同步时间</th>
+          <th>本地页数</th>
+          <th>远端页数</th>
+          <th>远端最新编辑</th>
+          <th>状态</th>
+          <th>说明</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in sync_status.rows %}
+        <tr>
+          <td><strong>{{ row.logical_db }}</strong></td>
+          <td class="code">{{ row.local_synced_at|tz8 }}</td>
+          <td>{{ row.local_page_count }}</td>
+          <td>{{ row.remote_page_count if row.remote_page_count is not none else '-' }}</td>
+          <td class="code">{{ row.remote_latest_edited|tz8 }}</td>
+          <td><span class="badge status-{{ row.status }}">{{ row.status|status_zh }}</span></td>
+          <td class="text-muted text-sm">{{ row.note or '-' }}</td>
+        </tr>
+        {% else %}
+        <tr>
+          <td colspan="7" class="text-muted text-center py-4">暂无同步记录</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <form method="post" action="/sync/run" class="bg-body p-4 rounded border border-color">
+    <div class="row items-center">
+      <div style="min-width: 200px;">
+        <label class="flex items-center gap-2">
+          <input type="checkbox" name="include_page_content" checked style="width:auto;margin:0;" />
+          同步页面正文 (Blocks)
+        </label>
+      </div>
+      <div style="width: 120px;">
+        <label>最大字符</label>
+        <input type="number" name="content_max_chars" value="1600" min="200" />
+      </div>
+      <div style="width: 120px;">
+        <label>最大深度</label>
+        <input type="number" name="content_max_depth" value="2" min="1" max="5" />
+      </div>
+      <div style="width: 120px;">
+        <label>分页大小</label>
+        <input type="number" name="page_size" value="100" min="10" max="100" />
+      </div>
+      <div style="padding-top: 24px;">
+        <button class="btn primary js-long-task" data-loading-text="同步中..." type="submit">
+          <svg style="width:16px;height:16px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"></path>
+          </svg>
+          执行同步
+        </button>
+      </div>
     </div>
   </form>
 </div>
 
-<div class="panel">
-  <h2>最近同步变更</h2>
-  <table>
-    <thead>
-      <tr>
-        <th>同步批次</th>
-        <th>状态</th>
-        <th>模式</th>
-        <th>页数</th>
-        <th>关联数</th>
-        <th>变更数</th>
-        <th>开始时间</th>
-        <th>摘要</th>
-      </tr>
-    </thead>
-    <tbody>
-      {% for row in sync_runs %}
-      <tr>
-        <td>#{{ row.run_id }}</td>
-        <td><span class="badge status-{{ row.status }}">{{ row.status|status_zh }}</span></td>
-        <td>{{ '增量' if row.incremental else '全量' }}</td>
-        <td>{{ row.page_count }}</td>
-        <td>{{ row.relation_count }}</td>
-        <td>{{ row.changed_count }}</td>
-        <td>{{ row.started_at|tz8 }}</td>
-        <td>{{ row.summary or '-' }}</td>
-      </tr>
-      {% else %}
-      <tr><td colspan="8" class="muted">暂无同步运行记录。</td></tr>
-      {% endfor %}
-    </tbody>
-  </table>
-  <h3 style="margin-top: 12px;">上次同步页面明细{% if latest_sync_run_id %}（#{{ latest_sync_run_id }}）{% endif %}</h3>
-  <table>
-    <thead>
-      <tr>
-        <th>库</th>
-        <th>变更类型</th>
-        <th>页面标题</th>
-        <th>页面ID</th>
-        <th>最后编辑</th>
-      </tr>
-    </thead>
-    <tbody>
-      {% for row in latest_sync_changes %}
-      <tr>
-        <td>{{ row.logical_db|status_zh }}</td>
-        <td>{{ row.change_type }}</td>
-        <td>{{ row.title or '-' }}</td>
-        <td class="muted">{{ row.page_id or '-' }}</td>
-        <td>{{ row.last_edited_time|tz8 }}</td>
-      </tr>
-      {% else %}
-      <tr><td colspan="5" class="muted">本次同步暂无页面级变更明细。</td></tr>
-      {% endfor %}
-    </tbody>
-  </table>
-</div>
+<!-- Workflow Section -->
+<div class="grid grid-2">
+  <!-- Agent Workflow -->
+  <div class="panel">
+    <div class="row justify-between mb-4">
+      <h2>Agent 工作流</h2>
+      <form method="post" action="/dashboard/refresh">
+        <input type="hidden" name="target" value="pending" />
+        <button class="btn secondary text-sm js-long-task" type="submit">刷新统计</button>
+      </form>
+    </div>
 
-<div class="panel">
-  <h2>Agent 工作流</h2>
-  {% if run_error %}
-  <div class="muted" style="margin-bottom: 8px;color:#b32522;">
-    工作流执行失败：{{ run_error }}
-  </div>
-  {% endif %}
-  {% if bootstrap_error %}
-  <div class="muted" style="margin-bottom: 8px;color:#b32522;">
-    {{ bootstrap_error }}
-  </div>
-  {% endif %}
-  <div class="row muted" style="margin-bottom: 10px;">
-    <div>模型：<strong>{{ model }}</strong></div>
-    <div>低置信度阈值：<strong>{{ '%.2f'|format(threshold) }}</strong></div>
-    <div>待处理统计缓存：{{ '命中' if pending_from_cache else '实时计算' }}（{{ pending_cache_ttl_seconds }} 秒）</div>
-    <form method="post" action="/dashboard/refresh">
-      <input type="hidden" name="target" value="pending" />
-      <button class="btn secondary js-long-task" data-loading-text="刷新中..." type="submit">刷新待处理统计</button>
+    {% if run_error %}<div class="badge status-failed mb-4 w-full">Workflow Error: {{ run_error }}</div>{% endif %}
+    {% if bootstrap_error %}<div class="badge status-failed mb-4 w-full">{{ bootstrap_error }}</div>{% endif %}
+
+    <div class="grid grid-2 mb-4">
+      <div class="kpi">
+        <div class="label">当前模型</div>
+        <div class="value" style="font-size:16px;">{{ model }}</div>
+      </div>
+      <div class="kpi">
+        <div class="label">置信度阈值</div>
+        <div class="value">{{ '%.2f'|format(threshold) }}</div>
+      </div>
+    </div>
+
+    <form method="post" action="/workflow/run">
+      <fieldset>
+        <legend>运行配置</legend>
+        <div class="row items-center">
+          <div class="flex-1">
+            <label>本次处理上限 (0 = 全部)</label>
+            <input type="number" name="limit" value="20" min="0" />
+          </div>
+          <div style="padding-top: 24px;">
+            <button class="btn primary js-long-task" data-loading-text="运行中..." type="submit">
+              <svg style="width:16px;height:16px;" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                stroke-width="2">
+                <polygon points="5 3 19 12 5 21 5 3"></polygon>
+              </svg>
+              启动工作流
+            </button>
+          </div>
+        </div>
+      </fieldset>
     </form>
   </div>
-  <form method="post" action="/workflow/run" class="row">
-    <div class="run-limit-field">
-      <label class="run-limit-label">本次处理上限（0 表示全部）</label>
-      <input type="number" name="limit" value="20" min="0" />
-    </div>
-    <div style="padding-top: 21px;">
-      <button class="btn js-long-task" data-loading-text="运行中..." type="submit">运行 Agent 工作流</button>
-    </div>
-  </form>
-</div>
 
-<div class="panel">
-  <h3>当前状态</h3>
-  <div class="row">
-    <div class="kpi"><div class="label">待处理错题</div><div class="value">{{ pending_targets }}</div></div>
-    <div class="kpi"><div class="label">待复核</div><div class="value">{{ pending_review }}</div></div>
-    <div class="kpi"><div class="label">需人工复核</div><div class="value">{{ needs_review }}</div></div>
-    <div class="kpi"><div class="label">已应用</div><div class="value">{{ applied }}</div></div>
-  </div>
-  <div class="row" style="margin-top: 10px;">
-    <a class="btn secondary" href="/suggestions?status=all">进入复核队列</a>
-    <a class="btn secondary" href="/suggestions?status=pending_review">查看待复核</a>
-    <a class="btn secondary" href="/suggestions?status=needs_review">查看需人工复核</a>
-  </div>
-</div>
+  <!-- Status Overview -->
+  <div class="panel">
+    <h2>当前状态</h2>
+    <div class="grid grid-2 mb-4">
+      <div class="kpi warning">
+        <div class="label">待处理错题</div>
+        <div class="value">{{ pending_targets }}</div>
+      </div>
+      <div class="kpi">
+        <div class="label">待复核生成</div>
+        <div class="value">{{ pending_review }}</div>
+      </div>
+      <div class="kpi danger">
+        <div class="label">需人工介入</div>
+        <div class="value">{{ needs_review }}</div>
+      </div>
+      <div class="kpi success">
+        <div class="label">已应用</div>
+        <div class="value">{{ applied }}</div>
+      </div>
+    </div>
 
-<div class="panel">
-  <h3>错题分析报告</h3>
-  <div class="muted" style="margin-bottom: 10px;">生成时间（东八区）：{{ analytics.generated_at|tz8 }}</div>
-  <div class="grid">
-    <div>
-      <h3>错题原因分布</h3>
-      <table>
-        <thead>
-          <tr><th>原因</th><th>数量</th><th>热度</th></tr>
-        </thead>
-        <tbody>
-          {% for row in analytics.reason_rows %}
-          <tr>
-            <td>{{ row.label }}</td>
-            <td>{{ row.count }}</td>
-            <td>
-              <div style="height:8px;background:rgba(31,120,255,0.14);border-radius:999px;overflow:hidden;">
-                <div style="height:8px;background:var(--primary);width:{{ row.ratio }}%;"></div>
-              </div>
-            </td>
-          </tr>
-          {% else %}
-          <tr><td colspan="3" class="muted">暂无数据。</td></tr>
-          {% endfor %}
-        </tbody>
-      </table>
-    </div>
-    <div>
-      <h3>概念薄弱点热力图</h3>
-      <table>
-        <thead>
-          <tr><th>概念</th><th>涉及次数</th><th>热度</th></tr>
-        </thead>
-        <tbody>
-          {% for row in analytics.concept_rows %}
-          <tr>
-            <td>{{ row.label }}</td>
-            <td>{{ row.count }}</td>
-            <td>
-              <div style="height:8px;background:rgba(255,140,59,0.14);border-radius:999px;overflow:hidden;">
-                <div style="height:8px;background:var(--warning);width:{{ row.ratio }}%;"></div>
-              </div>
-            </td>
-          </tr>
-          {% else %}
-          <tr><td colspan="3" class="muted">暂无数据。</td></tr>
-          {% endfor %}
-        </tbody>
-      </table>
-    </div>
-  </div>
-  <div class="grid" style="margin-top: 12px;">
-    <div>
-      <h3>五遍错题法通关率趋势（月）</h3>
-      {% if analytics.pass_note %}
-      <div class="muted" style="margin-bottom: 6px;">{{ analytics.pass_note }}</div>
-      {% endif %}
-      <table>
-        <thead>
-          <tr><th>周期</th><th>通关/总数</th><th>通关率</th></tr>
-        </thead>
-        <tbody>
-          {% for row in analytics.pass_rows %}
-          <tr>
-            <td>{{ row.period }}</td>
-            <td>{{ row.done }} / {{ row.total }}</td>
-            <td>{{ row.rate }}%</td>
-          </tr>
-          {% else %}
-          <tr><td colspan="3" class="muted">暂无数据。</td></tr>
-          {% endfor %}
-        </tbody>
-      </table>
-    </div>
-    <div>
-      <h3>错题数量趋势</h3>
-      <table>
-        <thead>
-          <tr><th>周</th><th>数量</th></tr>
-        </thead>
-        <tbody>
-          {% for row in analytics.week_rows %}
-          <tr><td>{{ row.period }}</td><td>{{ row.count }}</td></tr>
-          {% else %}
-          <tr><td colspan="2" class="muted">暂无数据。</td></tr>
-          {% endfor %}
-        </tbody>
-      </table>
-      <table style="margin-top:10px;">
-        <thead>
-          <tr><th>月</th><th>数量</th></tr>
-        </thead>
-        <tbody>
-          {% for row in analytics.month_rows %}
-          <tr><td>{{ row.period }}</td><td>{{ row.count }}</td></tr>
-          {% else %}
-          <tr><td colspan="2" class="muted">暂无数据。</td></tr>
-          {% endfor %}
-        </tbody>
-      </table>
-    </div>
-  </div>
-</div>
-
-<div class="panel">
-  <h3>最近运行记录</h3>
-  <table>
-    <thead>
-      <tr>
-        <th>批次</th>
-        <th>状态</th>
-        <th>目标数</th>
-        <th>建议数</th>
-        <th>需复核</th>
-        <th>失败数</th>
-        <th>开始时间</th>
-        <th>摘要</th>
-      </tr>
-    </thead>
-    <tbody>
-      {% for row in runs %}
-      <tr>
-        <td><a href="/runs/{{ row.run_id }}">#{{ row.run_id }}</a></td>
-        <td><span class="badge status-{{ row.status }}">{{ row.status|status_zh }}</span></td>
-        <td>{{ row.target_count }}</td>
-        <td>{{ row.suggestion_count }}</td>
-        <td>{{ row.needs_review_count }}</td>
-        <td>{{ row.failure_count }}</td>
-        <td>{{ row.started_at|tz8 }}</td>
-        <td>{{ row.summary }}</td>
-      </tr>
-      {% else %}
-      <tr><td colspan="8" class="muted">暂无运行记录。</td></tr>
-      {% endfor %}
-    </tbody>
-  </table>
-  <div class="row" style="justify-content: space-between; margin-top: 10px;">
-    <div class="muted">第 {{ runs_page }} / {{ runs_total_pages }} 页，共 {{ runs_total }} 条</div>
     <div class="row">
-      {% if runs_page > 1 %}
-      <a class="btn secondary" href="/errors?runs_page={{ runs_page - 1 }}">上一页</a>
-      {% endif %}
-      {% if runs_page < runs_total_pages %}
-      <a class="btn secondary" href="/errors?runs_page={{ runs_page + 1 }}">下一页</a>
-      {% endif %}
+      <a class="btn primary flex-1" href="/suggestions?status=all">
+        进入复核队列
+      </a>
+      <a class="btn secondary" href="/suggestions?status=pending_review">待复核</a>
+      <a class="btn secondary" href="/suggestions?status=needs_review">人工介入</a>
+    </div>
+  </div>
+</div>
+
+<!-- Analytics Section -->
+<div class="panel">
+  <div class="row justify-between mb-4">
+    <h2>错题分析报告</h2>
+    <div class="text-muted text-sm">生成时间: {{ analytics.generated_at|tz8 }}</div>
+  </div>
+
+  <div class="grid grid-2">
+    <div>
+      <h3>原因分布</h3>
+      <div class="table-container">
+        <table>
+          <thead>
+            <tr>
+              <th>原因</th>
+              <th>数量</th>
+              <th>占比</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for row in analytics.reason_rows %}
+            <tr>
+              <td>{{ row.label }}</td>
+              <td>{{ row.count }}</td>
+              <td style="width: 40%;">
+                <div
+                  style="width: 100%; height: 6px; background: var(--border-color); border-radius: 99px; overflow: hidden;">
+                  <div style="width: {{ row.ratio }}%; height: 100%; background: var(--primary);"></div>
+                </div>
+              </td>
+            </tr>
+            {% else %}
+            <tr>
+              <td colspan="3" class="text-muted">暂无数据</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div>
+      <h3>薄弱点热力</h3>
+      <div class="table-container">
+        <table>
+          <thead>
+            <tr>
+              <th>概念</th>
+              <th>频次</th>
+              <th>热度</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for row in analytics.concept_rows %}
+            <tr>
+              <td>{{ row.label }}</td>
+              <td>{{ row.count }}</td>
+              <td style="width: 40%;">
+                <div
+                  style="width: 100%; height: 6px; background: var(--border-color); border-radius: 99px; overflow: hidden;">
+                  <div style="width: {{ row.ratio }}%; height: 100%; background: var(--accent);"></div>
+                </div>
+              </td>
+            </tr>
+            {% else %}
+            <tr>
+              <td colspan="3" class="text-muted">暂无数据</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <div class="grid grid-2 mt-4">
+    <div>
+      <h3>五遍错题法通关率 (月)</h3>
+      {% if analytics.pass_note %}<div class="text-sm text-muted mb-2">{{ analytics.pass_note }}</div>{% endif %}
+      <div class="table-container">
+        <table>
+          <thead>
+            <tr>
+              <th>周期</th>
+              <th>进度</th>
+              <th>通关率</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for row in analytics.pass_rows %}
+            <tr>
+              <td>{{ row.period }}</td>
+              <td>{{ row.done }} / {{ row.total }}</td>
+              <td><strong>{{ row.rate }}%</strong></td>
+            </tr>
+            {% else %}
+            <tr>
+              <td colspan="3" class="text-muted">暂无数据</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div>
+      <h3>错题趋势</h3>
+      <div class="grid grid-2">
+        <div class="table-container">
+          <table>
+            <thead>
+              <tr>
+                <th>周</th>
+                <th>数量</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for row in analytics.week_rows %}
+              <tr>
+                <td>{{ row.period }}</td>
+                <td>{{ row.count }}</td>
+              </tr>
+              {% else %}
+              <tr>
+                <td colspan="2" class="text-muted">No Data</td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+        <div class="table-container">
+          <table>
+            <thead>
+              <tr>
+                <th>月</th>
+                <th>数量</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for row in analytics.month_rows %}
+              <tr>
+                <td>{{ row.period }}</td>
+                <td>{{ row.count }}</td>
+              </tr>
+              {% else %}
+              <tr>
+                <td colspan="2" class="text-muted">No Data</td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Recent Sync & Runs -->
+<div class="grid grid-2">
+  <div class="panel">
+    <h2>最近同步变更 (前 10)</h2>
+    <div class="table-container">
+      <table>
+        <thead>
+          <tr>
+            <th>ID</th>
+            <th>状态</th>
+            <th>模式</th>
+            <th>统计 (页/关/变)</th>
+            <th>时间</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for row in sync_runs %}
+          <tr>
+            <td>#{{ row.run_id }}</td>
+            <td><span class="badge status-{{ row.status }}">{{ row.status|status_zh }}</span></td>
+            <td>{{ '增量' if row.incremental else '全量' }}</td>
+            <td class="text-sm">
+              <span title="Pages">{{ row.page_count }}</span> /
+              <span title="Relations">{{ row.relation_count }}</span> /
+              <span title="Changed">{{ row.changed_count }}</span>
+            </td>
+            <td class="code text-sm">{{ row.started_at|tz8 }}</td>
+          </tr>
+          {% else %}
+          <tr>
+            <td colspan="5" class="text-muted text-center">暂无记录</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    <h3 class="mt-4">最新变更明细 {% if latest_sync_run_id %}(#{{ latest_sync_run_id }}){% endif %}</h3>
+    <div class="table-container" style="max-height: 300px; overflow-y: auto;">
+      <table>
+        <thead>
+          <tr>
+            <th>库</th>
+            <th>类型</th>
+            <th>标题</th>
+            <th>时间</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for row in latest_sync_changes %}
+          <tr>
+            <td><span class="badge">{{ row.logical_db|status_zh }}</span></td>
+            <td>{{ row.change_type }}</td>
+            <td title="{{ row.page_id }}">{{ row.title or 'Untitled' }}</td>
+            <td class="code text-sm">{{ row.last_edited_time|tz8 }}</td>
+          </tr>
+          {% else %}
+          <tr>
+            <td colspan="4" class="text-muted text-center">本次无变更</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="panel">
+    <h2>最近 Agent 运行</h2>
+    <div class="table-container">
+      <table>
+        <thead>
+          <tr>
+            <th>批次 ID</th>
+            <th>状态</th>
+            <th>目标/建议/失败</th>
+            <th>开始时间</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for row in runs %}
+          <tr>
+            <td><a href="/runs/{{ row.run_id }}" class="text-primary font-mono">#{{ row.run_id }}</a></td>
+            <td><span class="badge status-{{ row.status }}">{{ row.status|status_zh }}</span></td>
+            <td>{{ row.target_count }} / {{ row.suggestion_count }} / {{ row.failure_count }}</td>
+            <td class="code text-sm">{{ row.started_at|tz8 }}</td>
+          </tr>
+          {% else %}
+          <tr>
+            <td colspan="4" class="text-muted text-center">暂无记录</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    <div class="row justify-between mt-4">
+      <div class="text-sm text-muted">Page {{ runs_page }} of {{ runs_total_pages }} (Total: {{ runs_total }})</div>
+      <div class="row">
+        {% if runs_page > 1 %}
+        <a class="btn secondary text-sm" href="/errors?runs_page={{ runs_page - 1 }}">Previous</a>
+        {% endif %}
+        {% if runs_page < runs_total_pages %} <a class="btn secondary text-sm"
+          href="/errors?runs_page={{ runs_page + 1 }}">Next</a>
+          {% endif %}
+      </div>
     </div>
   </div>
 </div>

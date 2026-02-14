@@ -1,82 +1,131 @@
 {% extends "base.html" %}
+
 {% block content %}
-<div class="panel">
-  <h2>知识建议 #{{ row.suggestion_id }}</h2>
-  {% if action_notice %}
-  <div class="muted" style="margin-top:8px;color:#1a9a55;">{{ action_notice }}</div>
-  {% endif %}
-  {% if action_error %}
-  <div class="muted" style="margin-top:8px;color:#b32522;">{{ action_error }}</div>
-  {% endif %}
-  <div class="row muted">
-    <div>库：{{ row.logical_db|status_zh }}</div>
-    <div>状态：<span class="badge status-{{ row.status }}">{{ row.status|status_zh }}</span></div>
-    <div>置信度：<strong>{{ '%.2f'|format(row.confidence or 0) }}</strong></div>
-    <div>页面：{{ row.page_title }}</div>
-    <div>更新时间：{{ row.updated_at|tz8 }}</div>
+<div class="page-header">
+  <div class="breadcrumb">
+    <a href="/knowledge/suggestions">复核队列</a>
+    <span class="text-muted">/</span>
+    <span>建议 #{{ row.suggestion_id }}</span>
   </div>
-</div>
-
-<div class="panel">
-  <h3>步骤 1：来源上下文</h3>
-  <div class="grid">
-    <div>
-      <div class="muted">来源引用</div>
-      <div class="code">{% for item in source_refs %}{{ item }}
-{% endfor %}</div>
-    </div>
-    <div>
-      <div class="muted">源快照（摘要）</div>
-      <div class="code">{{ source_snapshot_pretty }}</div>
+  <div class="row justify-between items-center">
+    <h1 class="page-title">知识库整理详情</h1>
+    <div class="row gap-2">
+      <span class="badge">{{ row.logical_db|status_zh }}</span>
+      <span class="badge status-{{ row.status }}">{{ row.status|status_zh }}</span>
+      <span class="text-muted text-sm">{{ row.updated_at|tz8 }}</span>
     </div>
   </div>
+  <h2 class="text-xl font-bold mt-2">{{ row.page_title }}</h2>
 </div>
 
-<div class="panel">
-  <h3>步骤 2：Agent 结果与人工调整</h3>
-  <form method="post" action="/knowledge/suggestions/{{ row.suggestion_id }}/save">
-    <div>
-      <label>建议内容（Markdown）</label>
-      <textarea name="proposed_markdown" style="min-height: 360px;">{{ row.proposed_markdown }}</textarea>
-    </div>
-    <div style="margin-top: 10px;">
-      <label>复核备注</label>
-      <textarea name="reviewer_note">{{ row.reviewer_note or '' }}</textarea>
-    </div>
-    <div class="row" style="margin-top: 10px;">
-      <button type="submit" class="btn secondary">保存草稿</button>
-    </div>
-  </form>
-</div>
+{% if action_notice %}<div class="badge status-completed mb-4 w-full">{{ action_notice }}</div>{% endif %}
+{% if action_error %}<div class="badge status-failed mb-4 w-full">{{ action_error }}</div>{% endif %}
 
-<div class="panel">
-  <h3>步骤 3：确认决策</h3>
-  <div class="row" style="margin-bottom: 10px;">
-    <form method="post" action="/knowledge/suggestions/{{ row.suggestion_id }}/regenerate">
-      <input type="hidden" name="reviewer_note" value="{{ row.reviewer_note or '' }}" />
-      <button class="btn warn js-long-task" data-loading-text="重生成中..." type="submit">重新生成建议</button>
-    </form>
+<div class="grid grid-2">
+  <!-- Left Column: Source & Context -->
+  <div class="flex flex-col gap-4">
+    <!-- Step 1: Source Context -->
+    <div class="panel">
+      <h3>步骤 1: 原始上下文</h3>
+
+      <div class="mb-4">
+        <label class="text-muted text-xs uppercase tracking-wide">参考资料 (References)</label>
+        <div class="code" style="max-height: 120px;">{% for item in source_refs %}{{ item }}
+          {% endfor %}</div>
+      </div>
+
+      <div>
+        <label class="text-muted text-xs uppercase tracking-wide">原始内容快照 (摘要)</label>
+        <div class="code" style="max-height: 400px; overflow-y: auto;">{{ source_snapshot_pretty }}</div>
+      </div>
+    </div>
+
+    <div class="panel collapsed">
+      <details>
+        <summary class="cursor-pointer font-medium text-primary">查看原始 Agent JSON</summary>
+        <div class="code mt-4 text-xs">{{ model_response_pretty }}</div>
+      </details>
+    </div>
   </div>
-  <div class="row">
-    <form method="post" action="/knowledge/suggestions/{{ row.suggestion_id }}/approve">
-      <input type="hidden" name="reviewer_note" value="{{ row.reviewer_note or '' }}" />
-      <button class="btn success js-long-task" data-loading-text="回写中..." type="submit">确认并更新 Notion</button>
-    </form>
-    <form method="post" action="/knowledge/suggestions/{{ row.suggestion_id }}/reject">
-      <input type="hidden" name="reviewer_note" value="{{ row.reviewer_note or '' }}" />
-      <button class="btn danger" type="submit">驳回</button>
-    </form>
-  </div>
-  {% if row.validation_notes %}
-  <div class="muted" style="margin-top: 10px;"><strong>校验说明：</strong> {{ row.validation_notes }}</div>
-  {% endif %}
-  {% if row.failure_reason %}
-  <div class="muted" style="margin-top: 10px;color:#b32522;"><strong>失败原因：</strong> {{ row.failure_reason }}</div>
-  {% endif %}
-</div>
 
-<div class="panel">
-  <h3>Agent 原始 JSON</h3>
-  <div class="code">{{ model_response_pretty }}</div>
+  <!-- Right Column: Proposal & Decision -->
+  <div class="flex flex-col gap-4">
+    <!-- Step 2: Proposal -->
+    <div class="panel">
+      <div class="row justify-between items-center mb-4">
+        <h3>步骤 2: Agent 建议</h3>
+        <div class="badge {{ 'status-completed' if (row.confidence or 0) > 0.8 else 'status-warning' }}">
+          置信度: {{ '%.2f'|format(row.confidence or 0) }}
+        </div>
+      </div>
+
+      <form method="post" action="/knowledge/suggestions/{{ row.suggestion_id }}/save">
+        <fieldset>
+          <legend>复核与编辑内容</legend>
+          <div class="grid gap-4">
+            <div>
+              <label>建议 Markdown 内容</label>
+              <textarea name="proposed_markdown" class="font-mono text-sm"
+                style="min-height: 400px; line-height: 1.5;">{{ row.proposed_markdown }}</textarea>
+            </div>
+
+            <div>
+              <label>复核备注</label>
+              <textarea name="reviewer_note" rows="3"
+                placeholder="Add your comments here...">{{ row.reviewer_note or '' }}</textarea>
+            </div>
+          </div>
+
+          <div class="mt-4 flex justify-end">
+            <button type="submit" class="btn secondary text-sm">保存草稿</button>
+          </div>
+        </fieldset>
+      </form>
+    </div>
+
+    <!-- Step 3: Decision -->
+    <div class="panel">
+      <h3>步骤 3: 决策</h3>
+
+      <div class="grid gap-3">
+        <form method="post" action="/knowledge/suggestions/{{ row.suggestion_id }}/regenerate">
+          <input type="hidden" name="reviewer_note" value="{{ row.reviewer_note or '' }}" />
+          <button class="btn warning w-full js-long-task" data-loading-text="重新生成中..." type="submit">
+            重新生成建议
+          </button>
+        </form>
+
+        <div class="grid grid-2 gap-3">
+          <form method="post" action="/knowledge/suggestions/{{ row.suggestion_id }}/approve">
+            <input type="hidden" name="reviewer_note" value="{{ row.reviewer_note or '' }}" />
+            <button class="btn success w-full js-long-task" data-loading-text="写入中..." type="submit">
+              批准并写入
+            </button>
+          </form>
+
+          <form method="post" action="/knowledge/suggestions/{{ row.suggestion_id }}/reject">
+            <input type="hidden" name="reviewer_note" value="{{ row.reviewer_note or '' }}" />
+            <button class="btn danger w-full" type="submit">
+              拒绝
+            </button>
+          </form>
+        </div>
+      </div>
+
+      {% if row.validation_notes %}
+      <div class="mt-4 p-3 bg-body rounded border border-color">
+        <div class="text-xs uppercase text-muted font-bold mb-1">验证说明 (Validation Notes)</div>
+        <div class="text-sm">{{ row.validation_notes }}</div>
+      </div>
+      {% endif %}
+
+      {% if row.failure_reason %}
+      <div class="mt-4 p-3 bg-danger rounded border border-danger text-danger">
+        <div class="text-xs uppercase font-bold mb-1">失败原因 (Failure Reason)</div>
+        <div class="text-sm">{{ row.failure_reason }}</div>
+      </div>
+      {% endif %}
+    </div>
+  </div>
 </div>
 {% endblock %}

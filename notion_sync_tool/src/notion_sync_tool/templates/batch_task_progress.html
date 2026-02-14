@@ -1,40 +1,65 @@
 {% extends "base.html" %}
+
 {% block content %}
+<div class="page-header">
+  <div class="breadcrumb">
+    <span>首页</span>
+    <span class="text-muted">/</span>
+    <span>批处理任务</span>
+  </div>
+  <h1 class="page-title">{{ task_title }}</h1>
+  <div class="text-sm text-muted font-mono mt-2">
+    任务 ID: {{ task_id }}
+  </div>
+</div>
+
 <div class="panel">
-  <h2>{{ task_title }}</h2>
-  <div class="muted" style="margin-bottom:10px;">任务 ID：<span class="code" style="padding:2px 6px;max-height:none;">{{ task_id }}</span></div>
-  <div class="row" style="margin-bottom:10px;">
+  <div class="grid grid-4 mb-6">
     <div class="kpi">
       <div class="label">状态</div>
-      <div class="value" id="task-status" style="font-size:18px;">运行中</div>
+      <div class="value" id="task-status" style="font-size: 20px;">初始化中...</div>
     </div>
     <div class="kpi">
       <div class="label">已处理</div>
-      <div class="value"><span id="processed-count">0</span>/<span id="total-count">0</span></div>
+      <div class="value">
+        <span id="processed-count">0</span><span class="text-muted text-lg font-normal"> / <span
+            id="total-count">0</span></span>
+      </div>
     </div>
-    <div class="kpi">
+    <div class="kpi success">
       <div class="label">成功</div>
       <div class="value" id="success-count">0</div>
     </div>
-    <div class="kpi">
+    <div class="kpi danger">
       <div class="label">失败</div>
       <div class="value" id="failed-count">0</div>
     </div>
   </div>
-  <div style="border:1px solid var(--line);border-radius:10px;overflow:hidden;background:rgba(127,127,127,0.12);margin:8px 0 12px;">
-    <div id="progress-bar" style="height:14px;width:0%;background:var(--primary);transition:width .25s ease;"></div>
+
+  <div class="w-full bg-body rounded-full h-4 mb-4 overflow-hidden border border-color">
+    <div id="progress-bar" class="bg-primary h-full transition-all duration-300" style="width: 0%"></div>
   </div>
-  <div class="muted" id="task-message">正在启动任务...</div>
-  <div class="muted" id="current-item" style="margin-top:6px;">当前记录：-</div>
-  <div class="muted" id="last-error" style="margin-top:6px;color:#b32522;"></div>
-  <div class="row" style="margin-top:14px;">
-    <a class="btn secondary" href="{{ back_url }}">返回复核队列</a>
+
+  <div class="text-center mb-6">
+    <div id="task-message" class="text-lg font-medium text-main mb-2">任务启动中...</div>
+    <div id="current-item" class="text-sm text-muted">当前项目: -</div>
+    <div id="last-error" class="text-sm text-danger mt-2 font-medium"></div>
+  </div>
+
+  <div class="flex justify-center">
+    <a class="btn secondary" href="{{ back_url }}">
+      <svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <line x1="19" y1="12" x2="5" y2="12"></line>
+        <polyline points="12 19 5 12 12 5"></polyline>
+      </svg>
+      返回队列
+    </a>
   </div>
 </div>
 
 <script>
-  const statusUrl = {{ status_url|tojson }};
-  const doneRedirectUrl = {{ done_redirect_url|tojson }};
+  const statusUrl = {{ status_url| tojson }};
+  const doneRedirectUrl = {{ done_redirect_url| tojson }};
   let redirected = false;
 
   function toPercent(processed, total) {
@@ -66,18 +91,28 @@
       document.getElementById("success-count").textContent = String(success);
       document.getElementById("failed-count").textContent = String(failed);
       document.getElementById("progress-bar").style.width = pct + "%";
-      document.getElementById("task-message").textContent = data.message || "";
+
+      const messageEl = document.getElementById("task-message");
+      messageEl.textContent = data.message || (data.status === "running" ? "处理中..." : "完成");
+
       const title = (data.current_item_title || "").trim();
       const currentId = data.current_item_id ? ("#" + data.current_item_id) : "";
-      document.getElementById("current-item").textContent = "当前记录：" + (currentId || title ? (currentId + (title ? (" " + title) : "")) : "-");
-      document.getElementById("last-error").textContent = data.last_error ? ("最近错误：" + data.last_error) : "";
+      document.getElementById("current-item").textContent = "正在处理: " + (currentId || title ? (currentId + (title ? (" " + title) : "")) : "-");
+
+      const errorEl = document.getElementById("last-error");
+      if (data.last_error) {
+        errorEl.textContent = "最新错误: " + data.last_error;
+        errorEl.style.display = 'block';
+      } else {
+        errorEl.style.display = 'none';
+      }
 
       if (!redirected && (data.status === "completed" || data.status === "failed")) {
         redirected = true;
-        setTimeout(() => { window.location.href = doneRedirectUrl; }, 900);
+        setTimeout(() => { window.location.href = doneRedirectUrl; }, 1500);
       }
     } catch (error) {
-      document.getElementById("task-message").textContent = "进度拉取失败，请稍后重试。";
+      document.getElementById("task-message").textContent = "连接中断，正在重试...";
     }
   }
 

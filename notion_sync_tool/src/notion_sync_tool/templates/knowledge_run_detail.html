@@ -1,76 +1,110 @@
 {% extends "base.html" %}
+
 {% block content %}
-<div class="panel">
-  <h2>知识库整理批次 #{{ run.run_id }}</h2>
-  <div class="row muted">
-    <div>状态：<span class="badge status-{{ run.status }}">{{ run.status|status_zh }}</span></div>
-    <div>开始：{{ run.started_at|tz8 }}</div>
-    <div>结束：{{ run.finished_at|tz8 }}</div>
-    <div><a href="/knowledge/suggestions">查看复核队列</a></div>
+<div class="page-header">
+  <div class="breadcrumb">
+    <a href="/knowledge">知识库</a>
+    <span class="text-muted">/</span>
+    <span>运行记录</span>
   </div>
-  <div class="row" style="margin-top: 10px;">
-    <div class="kpi"><div class="label">目标数</div><div class="value">{{ run.target_count }}</div></div>
-    <div class="kpi"><div class="label">建议数</div><div class="value">{{ run.suggestion_count }}</div></div>
-    <div class="kpi"><div class="label">需复核</div><div class="value">{{ run.needs_review_count }}</div></div>
-    <div class="kpi"><div class="label">失败数</div><div class="value">{{ run.failure_count }}</div></div>
+  <div class="row justify-between items-center">
+    <h1 class="page-title">运行 #{{ run.run_id }}</h1>
+    <div class="row gap-2">
+      <span class="badge status-{{ run.status }}">{{ run.status|status_zh }}</span>
+      <span class="text-sm text-muted font-mono">{{ run.started_at|tz8 }}</span>
+    </div>
+  </div>
+</div>
+
+<div class="grid grid-2 mb-4">
+  <div class="panel h-full">
+    <h2>运行统计</h2>
+    <div class="grid grid-2">
+      <div class="kpi">
+        <div class="label">目标数</div>
+        <div class="value">{{ run.target_count }}</div>
+      </div>
+      <div class="kpi success">
+        <div class="label">建议数</div>
+        <div class="value">{{ run.suggestion_count }}</div>
+      </div>
+      <div class="kpi warning">
+        <div class="label">待复核</div>
+        <div class="value">{{ run.needs_review_count }}</div>
+      </div>
+      <div class="kpi danger">
+        <div class="label">失败数</div>
+        <div class="value">{{ run.failure_count }}</div>
+      </div>
+    </div>
+    <div class="mt-4 text-sm text-muted">
+      结束时间: <strong>{{ run.finished_at|tz8 if run.finished_at else '运行中...' }}</strong>
+    </div>
+  </div>
+
+  <div class="panel h-full">
+    <h2>执行步骤 (Execution Steps)</h2>
+    <div class="table-container" style="max-height: 240px; overflow-y: auto;">
+      <table>
+        <thead>
+          <tr>
+            <th>时间</th>
+            <th>步骤</th>
+            <th>状态</th>
+            <th>消息</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for e in events %}
+          <tr>
+            <td class="code text-sm text-muted whitespace-nowrap">{{ e.created_at|tz8 }}</td>
+            <td>{{ e.step|step_zh }}</td>
+            <td><span class="badge status-{{ e.status }}">{{ e.status|status_zh }}</span></td>
+            <td class="text-sm">{{ e.message }}</td>
+          </tr>
+          {% else %}
+          <tr>
+            <td colspan="4" class="text-center text-muted">暂无步骤记录。</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
   </div>
 </div>
 
 <div class="panel">
-  <h3>步骤输出</h3>
-  <table>
-    <thead>
-      <tr>
-        <th>时间</th>
-        <th>步骤</th>
-        <th>状态</th>
-        <th>信息</th>
-        <th>详情</th>
-      </tr>
-    </thead>
-    <tbody>
-      {% for e in events %}
-      <tr>
-        <td>{{ e.created_at|tz8 }}</td>
-        <td>{{ e.step|step_zh }}</td>
-        <td><span class="badge status-{{ e.status }}">{{ e.status|status_zh }}</span></td>
-        <td>{{ e.message }}</td>
-        <td class="code">{{ e.detail_json }}</td>
-      </tr>
-      {% else %}
-      <tr><td colspan="5" class="muted">暂无步骤日志。</td></tr>
-      {% endfor %}
-    </tbody>
-  </table>
-</div>
-
-<div class="panel">
-  <h3>本批次建议</h3>
-  <table>
-    <thead>
-      <tr>
-        <th>建议</th>
-        <th>库</th>
-        <th>页面标题</th>
-        <th>状态</th>
-        <th>置信度</th>
-        <th>更新时间</th>
-      </tr>
-    </thead>
-    <tbody>
-      {% for row in suggestions %}
-      <tr>
-        <td><a href="/knowledge/suggestions/{{ row.suggestion_id }}">#{{ row.suggestion_id }}</a></td>
-        <td>{{ row.logical_db|status_zh }}</td>
-        <td>{{ row.page_title }}</td>
-        <td><span class="badge status-{{ row.status }}">{{ row.status|status_zh }}</span></td>
-        <td>{{ '%.2f'|format(row.confidence or 0) }}</td>
-        <td>{{ row.updated_at|tz8 }}</td>
-      </tr>
-      {% else %}
-      <tr><td colspan="6" class="muted">暂无建议。</td></tr>
-      {% endfor %}
-    </tbody>
-  </table>
+  <h2>生成的建议 (Generated Suggestions)</h2>
+  <div class="table-container">
+    <table>
+      <thead>
+        <tr>
+          <th>ID</th>
+          <th>知识库</th>
+          <th>页面标题</th>
+          <th>状态</th>
+          <th>置信度</th>
+          <th>更新时间</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for s in suggestions %}
+        <tr>
+          <td><a href="/knowledge/suggestions/{{ s.suggestion_id }}"
+              class="text-primary font-mono font-medium hover:underline">#{{ s.suggestion_id }}</a></td>
+          <td><span class="badge">{{ s.logical_db|status_zh }}</span></td>
+          <td class="text-main">{{ s.page_title }}</td>
+          <td><span class="badge status-{{ s.status }}">{{ s.status|status_zh }}</span></td>
+          <td>{{ '%.2f'|format(s.confidence or 0) }}</td>
+          <td class="text-sm text-muted">{{ s.updated_at|tz8 }}</td>
+        </tr>
+        {% else %}
+        <tr>
+          <td colspan="6" class="text-center py-6 text-muted">本次运行未生成建议。</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
 </div>
 {% endblock %}
